@@ -1,0 +1,6 @@
+{
+  "name": "DSA Vault",
+  "description": "A personal Data Structures & Algorithms revision tracker and dashboard to search, filter, and review solved problems.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
