@@ -1,158 +1,288 @@
 import { useState, useEffect, useCallback } from 'react';
-import { UserProblemData, UserProblemStatus } from '../types';
+import type { UserProblemData, UserProblemStatus } from '../types';
+import { supabase } from '../utils/supabase';
+
 
 const STORAGE_KEY = 'dsa_roadmap_progress_v1';
 
-// Initial pre-filled sample progress so new users see how the roadmap works
-const INITIAL_SAMPLE_PROGRESS: Record<string, UserProblemData> = {
-  '1': { status: 'solved', isFavorite: true, solvedAt: '2026-10-10T12:00:00Z', notes: 'Simple single pass tracking max count with count = num === 1 ? count + 1 : 0.', timeComplexity: 'O(N)', spaceComplexity: 'O(1)' },
-  '3': { status: 'solved', isFavorite: false, solvedAt: '2026-10-11T14:30:00Z', notes: 'Two pointers: non-zero write pointer tracking placement position.', timeComplexity: 'O(N)', spaceComplexity: 'O(1)' },
-  '8': { status: 'solved', isFavorite: true, solvedAt: '2026-10-12T09:15:00Z', notes: 'Track minPrice so far, profit = max(profit, price - minPrice).', timeComplexity: 'O(N)', spaceComplexity: 'O(1)' },
-  '12': { status: 'revision', isFavorite: true, notes: 'Need to review prefix and suffix product passes without division!', timeComplexity: 'O(N)', spaceComplexity: 'O(1)' },
-  '22': { status: 'solved', isFavorite: false, solvedAt: '2026-10-12T16:20:00Z', notes: 'Filter alphanumeric chars and use two pointers from edges inward.', timeComplexity: 'O(N)', spaceComplexity: 'O(1)' },
-  '49': { status: 'solved', isFavorite: false, solvedAt: '2026-10-13T01:10:00Z', notes: 'Direct bucket array with separate chaining for collisions.', timeComplexity: 'O(1) amortized', spaceComplexity: 'O(N)' },
-  '72': { status: 'solved', isFavorite: true, solvedAt: '2026-10-13T02:00:00Z', notes: 'Hash map of complement target - num -> index.', timeComplexity: 'O(N)', spaceComplexity: 'O(N)' },
-  '77': { status: 'revision', isFavorite: true, notes: 'Two pointers at bounds; move pointer with smaller height inwards.', timeComplexity: 'O(N)', spaceComplexity: 'O(1)' },
-  '103': { status: 'revision', isFavorite: true, notes: 'Sliding window tracking character set and shrinking left on collision.', timeComplexity: 'O(N)', spaceComplexity: 'O(min(N, Alphabet))' },
+type ProgressRow = {
+problem_id: string;
+status: UserProblemStatus;
+is_favorite: boolean;
+solved_at: string | null;
+notes: string | null;
+time_complexity: string | null;
+space_complexity: string | null;
 };
 
 export function useRoadmapStorage() {
-  const [userState, setUserState] = useState<Record<string, UserProblemData>>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        return JSON.parse(stored);
+const [userState, setUserState] = useState<Record<string, UserProblemData>>({});
+const [isLoaded, setIsLoaded] = useState(false);
+
+// Load the signed-in user's progress from Supabase.
+useEffect(() => {
+let cancelled = false;
+
+async function loadProgress() {
+  try {
+    const { data: authData, error: authError } =
+      await supabase.auth.getUser();
+
+    if (authError) throw authError;
+
+    if (!authData.user) {
+      if (!cancelled) {
+        setUserState({});
+        setIsLoaded(true);
       }
-    } catch (e) {
-      console.warn('Failed to read from localStorage', e);
+      return;
     }
-    return INITIAL_SAMPLE_PROGRESS;
-  });
 
-  // Save changes to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(userState));
-    } catch (e) {
-      console.warn('Failed to save to localStorage', e);
+    const { data, error } = await supabase
+      .from('dsa_progress')
+      .select('*')
+      .eq('user_id', authData.user.id);
+
+    if (error) throw error;
+
+    const progress: Record<string, UserProblemData> = {};
+
+    for (const row of (data ?? []) as ProgressRow[]) {
+      progress[row.problem_id] = {
+        status: row.status,
+        isFavorite: row.is_favorite,
+        solvedAt: row.solved_at ?? undefined,
+        notes: row.notes ?? undefined,
+        timeComplexity: row.time_complexity ?? undefined,
+        spaceComplexity: row.space_complexity ?? undefined,
+      };
     }
-  }, [userState]);
 
-  const getProblemData = useCallback(
-    (problemId: string): UserProblemData => {
-      return (
-        userState[problemId] || {
-          status: 'unsolved',
-          isFavorite: false,
-        }
-      );
-    },
-    [userState]
-  );
+    if (!cancelled) {
+      setUserState(progress);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+    }
+  } catch (error) {
+    console.error('Failed to load DSA progress from Supabase:', error);
 
-  const toggleSolved = useCallback((problemId: string) => {
-    setUserState((prev) => {
-      const current = prev[problemId] || { status: 'unsolved', isFavorite: false };
-      const nextStatus: UserProblemStatus = current.status === 'solved' ? 'unsolved' : 'solved';
-      return {
-        ...prev,
-        [problemId]: {
-          ...current,
-          status: nextStatus,
-          solvedAt: nextStatus === 'solved' ? new Date().toISOString() : undefined,
-        },
-      };
-    });
-  }, []);
-
-  const toggleRevision = useCallback((problemId: string) => {
-    setUserState((prev) => {
-      const current = prev[problemId] || { status: 'unsolved', isFavorite: false };
-      const nextStatus: UserProblemStatus = current.status === 'revision' ? 'unsolved' : 'revision';
-      return {
-        ...prev,
-        [problemId]: {
-          ...current,
-          status: nextStatus,
-        },
-      };
-    });
-  }, []);
-
-  const toggleFavorite = useCallback((problemId: string) => {
-    setUserState((prev) => {
-      const current = prev[problemId] || { status: 'unsolved', isFavorite: false };
-      return {
-        ...prev,
-        [problemId]: {
-          ...current,
-          isFavorite: !current.isFavorite,
-        },
-      };
-    });
-  }, []);
-
-  const saveProblemNotes = useCallback(
-    (
-      problemId: string,
-      data: {
-        notes?: string;
-        timeComplexity?: string;
-        spaceComplexity?: string;
-        status?: UserProblemStatus;
+    if (!cancelled) {
+      try {
+        const cached = localStorage.getItem(STORAGE_KEY);
+        setUserState(cached ? JSON.parse(cached) : {});
+      } catch {
+        setUserState({});
       }
-    ) => {
-      setUserState((prev) => {
-        const current = prev[problemId] || { status: 'unsolved', isFavorite: false };
-        return {
-          ...prev,
-          [problemId]: {
-            ...current,
-            ...data,
-            status: data.status !== undefined ? data.status : current.status,
-          },
-        };
-      });
-    },
-    []
-  );
-
-  const resetAllProgress = useCallback(() => {
-    setUserState({});
-  }, []);
-
-  const exportProgress = useCallback(() => {
-    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(userState, null, 2));
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute('href', dataStr);
-    downloadAnchor.setAttribute('download', `dsa-vault-progress-${new Date().toISOString().slice(0, 10)}.json`);
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
-  }, [userState]);
-
-  const importProgress = useCallback((jsonStr: string) => {
-    try {
-      const parsed = JSON.parse(jsonStr);
-      if (typeof parsed === 'object' && parsed !== null) {
-        setUserState(parsed);
-        return true;
-      }
-    } catch (e) {
-      console.error('Invalid JSON file', e);
     }
-    return false;
-  }, []);
+  } finally {
+    if (!cancelled) setIsLoaded(true);
+  }
+}
+
+loadProgress();
+
+return () => {
+  cancelled = true;
+};
+
+}, []);
+
+// Cache locally and synchronize changes with Supabase.
+useEffect(() => {
+if (!isLoaded) return;
+
+
+localStorage.setItem(STORAGE_KEY, JSON.stringify(userState));
+
+let cancelled = false;
+
+async function syncProgress() {
+  try {
+    const { data: authData, error: authError } =
+      await supabase.auth.getUser();
+
+    if (authError) throw authError;
+    if (!authData.user) return;
+
+    const rows = Object.entries(userState).map(([problemId, item]) => ({
+      problem_id: problemId,
+      user_id: authData.user!.id,
+      status: item.status,
+      is_favorite: item.isFavorite,
+      solved_at: item.solvedAt ?? null,
+      notes: item.notes ?? null,
+      time_complexity: item.timeComplexity ?? null,
+      space_complexity: item.spaceComplexity ?? null,
+      updated_at: new Date().toISOString(),
+    }));
+
+    if (rows.length > 0 && !cancelled) {
+      const { error } = await supabase
+        .from('dsa_progress')
+        .upsert(rows, { onConflict: 'problem_id' });
+
+      if (error) throw error;
+    }
+  } catch (error) {
+    console.error('Failed to sync DSA progress:', error);
+  }
+}
+
+syncProgress();
+
+return () => {
+  cancelled = true;
+};
+
+}, [userState, isLoaded]);
+
+const getProblemData = useCallback(
+(problemId: string): UserProblemData =>
+userState[problemId] ?? {
+status: 'unsolved',
+isFavorite: false,
+},
+[userState]
+);
+
+const toggleSolved = useCallback((problemId: string) => {
+setUserState((prev) => {
+const current = prev[problemId] ?? {
+status: 'unsolved' as UserProblemStatus,
+isFavorite: false,
+};
+
+  const nextStatus: UserProblemStatus =
+    current.status === 'solved' ? 'unsolved' : 'solved';
 
   return {
-    userState,
-    getProblemData,
-    toggleSolved,
-    toggleRevision,
-    toggleFavorite,
-    saveProblemNotes,
-    resetAllProgress,
-    exportProgress,
-    importProgress,
+    ...prev,
+    [problemId]: {
+      ...current,
+      status: nextStatus,
+      solvedAt:
+        nextStatus === 'solved' ? new Date().toISOString() : undefined,
+    },
   };
+});
+
+}, []);
+
+const toggleRevision = useCallback((problemId: string) => {
+setUserState((prev) => {
+const current = prev[problemId] ?? {
+status: 'unsolved' as UserProblemStatus,
+isFavorite: false,
+};
+  return {
+    ...prev,
+    [problemId]: {
+      ...current,
+      status:
+        current.status === 'revision' ? 'unsolved' : 'revision',
+    },
+  };
+});
+
+}, []);
+
+const toggleFavorite = useCallback((problemId: string) => {
+setUserState((prev) => {
+const current = prev[problemId] ?? {
+status: 'unsolved' as UserProblemStatus,
+isFavorite: false,
+};
+
+
+  return {
+    ...prev,
+    [problemId]: {
+      ...current,
+      isFavorite: !current.isFavorite,
+    },
+  };
+});
+
+
+}, []);
+
+const saveProblemNotes = useCallback(
+(
+problemId: string,
+data: {
+notes?: string;
+timeComplexity?: string;
+spaceComplexity?: string;
+status?: UserProblemStatus;
+}
+) => {
+setUserState((prev) => {
+const current = prev[problemId] ?? {
+status: 'unsolved' as UserProblemStatus,
+isFavorite: false,
+};
+
+    return {
+      ...prev,
+      [problemId]: {
+        ...current,
+        ...data,
+        status: data.status ?? current.status,
+      },
+    };
+  });
+},
+[]
+
+
+);
+
+const resetAllProgress = useCallback(() => {
+setUserState({});
+}, []);
+
+const exportProgress = useCallback(() => {
+const blob = new Blob([JSON.stringify(userState, null, 2)], {
+type: 'application/json',
+});
+const url = URL.createObjectURL(blob);
+const anchor = document.createElement('a');
+anchor.href = url;
+anchor.download = `dsa-vault-progress-${new Date()
+      .toISOString()
+      .slice(0, 10)}.json`;
+anchor.click();
+URL.revokeObjectURL(url);
+}, [userState]);
+
+const importProgress = useCallback((jsonStr: string) => {
+try {
+const parsed = JSON.parse(jsonStr);
+
+  if (
+    typeof parsed === 'object' &&
+    parsed !== null &&
+    !Array.isArray(parsed)
+  ) {
+    setUserState(parsed);
+    return true;
+  }
+} catch (error) {
+  console.error('Invalid progress JSON:', error);
+}
+
+return false;
+
+}, []);
+
+return {
+userState,
+getProblemData,
+toggleSolved,
+toggleRevision,
+toggleFavorite,
+saveProblemNotes,
+resetAllProgress,
+exportProgress,
+importProgress,
+};
 }

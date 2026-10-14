@@ -1,4 +1,3 @@
-import React, { useState, useMemo } from 'react';
 import { RoadmapViewMode, DSAProblem } from './types';
 import { allDSAProblems } from './data/dsaLoader';
 import { useRoadmapStorage } from './lib/useRoadmapStorage';
@@ -13,6 +12,75 @@ import { SearchModal } from './components/SearchModal';
 import { RandomChallengeModal } from './components/RandomChallengeModal';
 import { DataManagementModal } from './components/DataManagementModal';
 import { Compass, FolderTree, Table } from 'lucide-react';
+import { supabase } from './utils/supabase'
+import React, { useState, useMemo, useEffect } from 'react';
+
+function LoginScreen() {
+const [email, setEmail] = useState('');
+const [password, setPassword] = useState('');
+const [loading, setLoading] = useState(false);
+const [error, setError] = useState('');
+
+const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
+e.preventDefault();
+setLoading(true);
+setError('');
+
+const { error } = await supabase.auth.signInWithPassword({
+  email,
+  password,
+});
+
+if (error) {
+  setError(error.message);
+}
+
+setLoading(false);
+
+};
+
+return (
+<div className="min-h-screen flex items-center justify-center bg-[#191919] text-white p-4">
+<form onSubmit={handleLogin} className="w-full max-w-sm space-y-4">
+<h1 className="text-2xl font-semibold">DSA Roadmap Vault</h1>
+<p className="text-sm text-gray-400">Sign in to access your saved progress.</p>
+
+    <input
+      type="email"
+      placeholder="Email"
+      value={email}
+      onChange={(e) => setEmail(e.target.value)}
+      required
+      className="w-full rounded border border-gray-700 bg-[#242424] p-3"
+    />
+
+    <input
+      type="password"
+      placeholder="Password"
+      value={password}
+      onChange={(e) => setPassword(e.target.value)}
+      required
+      className="w-full rounded border border-gray-700 bg-[#242424] p-3"
+    />
+
+    {error && <p className="text-sm text-red-400">{error}</p>}
+
+    <button
+      type="submit"
+      disabled={loading}
+      className="w-full rounded bg-violet-600 p-3 hover:bg-violet-700 disabled:opacity-50"
+    >
+      {loading ? 'Signing in...' : 'Sign in'}
+    </button>
+  </form>
+</div>
+
+);
+}
+
+
+
+
 
 function RoadmapAppContent() {
   const { isDark } = useTheme();
@@ -310,6 +378,36 @@ function RoadmapAppContent() {
 }
 
 export default function App() {
+  const [session, setSession] = useState<any>(null);
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setCheckingSession(false);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  if (checkingSession) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        Loading...
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <LoginScreen />;
+  }
+
   return (
     <ThemeProvider>
       <RoadmapAppContent />
