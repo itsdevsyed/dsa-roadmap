@@ -12,6 +12,7 @@ import {
   BookMarked,
   Sun,
   Moon,
+  LogOut, // Added LogOut icon
 } from 'lucide-react';
 
 interface RoadmapNavbarProps {
@@ -22,6 +23,7 @@ interface RoadmapNavbarProps {
   onExport: () => void;
   onImportClick: () => void;
   onReset: () => void;
+  onLogout: () => void; // Added Logout handler
 }
 
 export const RoadmapNavbar: React.FC<RoadmapNavbarProps> = ({
@@ -31,6 +33,8 @@ export const RoadmapNavbar: React.FC<RoadmapNavbarProps> = ({
   onPickRandom,
   onExport,
   onImportClick,
+  onReset,
+  onLogout, // Destructure new prop
 }) => {
   const { theme, isDark, toggleTheme } = useTheme();
 
@@ -243,6 +247,24 @@ export const RoadmapNavbar: React.FC<RoadmapNavbarProps> = ({
             aria-label="Import Data"
           >
             <Upload size={14} />
+          </button>
+
+          {/* Divider */}
+          <div className={`h-4 w-[1px] mx-1 ${isDark ? 'bg-[#333]' : 'bg-[#e3e2de]'}`} />
+
+          {/* LOGOUT BUTTON */}
+          <button
+            type="button"
+            onClick={onLogout}
+            className={`p-1.5 rounded-[5px] border transition-colors group ${
+              isDark
+                ? 'text-[#9b9b9b] hover:text-red-400 hover:bg-red-900/20 border-transparent hover:border-red-900/50'
+                : 'text-[#787774] hover:text-red-600 hover:bg-red-50 border-transparent hover:border-red-200'
+            }`}
+            title="Sign Out"
+            aria-label="Sign Out"
+          >
+            <LogOut size={14} className="group-hover:translate-x-0.5 transition-transform" />
           </button>
         </div>
       </div>
