@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../utils/supabase';
 import {
   ArrowRight,
@@ -13,22 +13,110 @@ interface LoginScreenProps {
   onGuestAccess?: () => void;
 }
 
-// Floating DSA background elements for elite aesthetic
-const floatingElements = [
-  { text: 'O(log n)', top: '15%', left: '10%', delay: '0s', duration: '8s' },
-  { text: 'Binary Search', top: '75%', left: '15%', delay: '2s', duration: '10s' },
-  { text: 'Graph Traversal', top: '20%', right: '12%', delay: '1s', duration: '9s' },
-  { text: 'O(n log n)', bottom: '18%', right: '15%', delay: '3s', duration: '11s' },
-  { text: 'Dynamic Programming', top: '45%', left: '5%', delay: '1.5s', duration: '12s' },
-  { text: 'Two Pointers', top: '50%', right: '8%', delay: '2.5s', duration: '9.5s' },
-  { text: 'Heap / Priority Queue', bottom: '10%', left: '40%', delay: '4s', duration: '10.5s' },
-];
-
 export function LoginScreen({ onGuestAccess }: LoginScreenProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // --- Interactive Canvas Animation (Graph / Binary Tree Nodes) ---
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let animationFrameId: number;
+    let width = (canvas.width = window.innerWidth);
+    let height = (canvas.height = window.innerHeight);
+
+    const handleResize = () => {
+      if (!canvas) return;
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+    };
+    window.addEventListener('resize', handleResize);
+
+    // Node & Edge Configuration
+    const nodeCount = 25;
+    const nodes: Array<{
+      x: number;
+      y: number;
+      vx: number;
+      vy: number;
+      radius: number;
+      label: string;
+    }> = [];
+
+    const labels = ['O(1)', 'O(n)', 'O(log n)', 'BST', 'DFS', 'BFS', 'DP', 'Heap', 'Graph', 'Array'];
+
+    for (let i = 0; i < nodeCount; i++) {
+      nodes.push({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        vx: (Math.random() - 0.5) * 0.6,
+        vy: (Math.random() - 0.5) * 0.6,
+        radius: Math.random() * 3 + 2,
+        label: labels[Math.floor(Math.random() * labels.length)],
+      });
+    }
+
+    const render = () => {
+      ctx.clearRect(0, 0, width, height);
+
+      // Update & Draw Nodes
+      for (let i = 0; i < nodes.length; i++) {
+        const node = nodes[i];
+        node.x += node.vx;
+        node.y += node.vy;
+
+        if (node.x < 0 || node.x > width) node.vx *= -1;
+        if (node.y < 0 || node.y > height) node.vy *= -1;
+
+        // Draw connections / edges
+        for (let j = i + 1; j < nodes.length; j++) {
+          const other = nodes[j];
+          const dx = node.x - other.x;
+          const dy = node.y - other.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+
+          if (dist < 160) {
+            ctx.beginPath();
+            ctx.moveTo(node.x, node.y);
+            ctx.lineTo(other.x, other.y);
+            // Opacity based on distance
+            const alpha = (1 - dist / 160) * 0.15;
+            ctx.strokeStyle = `rgba(139, 92, 246, ${alpha})`;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+          }
+        }
+
+        // Draw Node dot
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(167, 139, 250, 0.5)';
+        ctx.fill();
+
+        // Draw subtle text label for specific nodes
+        if (i % 3 === 0) {
+          ctx.font = '10px JetBrains Mono, monospace';
+          ctx.fillStyle = 'rgba(156, 163, 175, 0.35)';
+          ctx.fillText(node.label, node.x + 8, node.y + 3);
+        }
+      }
+
+      animationFrameId = requestAnimationFrame(render);
+    };
+
+    render();
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, []);
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -52,35 +140,17 @@ export function LoginScreen({ onGuestAccess }: LoginScreenProps) {
   };
 
   return (
-    <div className="relative min-h-screen w-full flex items-center justify-center bg-[#0C0C0E] text-white overflow-hidden selection:bg-violet-500 selection:text-white">
+    <div className="relative min-h-screen w-full flex items-center justify-center bg-[#09090B] text-white overflow-hidden selection:bg-violet-500 selection:text-white">
 
-      {/* --- Ambient Gradients & Grid Background --- */}
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#1f1f22_1px,transparent_1px),linear-gradient(to_bottom,#1f1f22_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] opacity-25 pointer-events-none" />
+      {/* --- Live Interactive Canvas Background Animation --- */}
+      <canvas ref={canvasRef} className="absolute inset-0 pointer-events-none z-0" />
 
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-gradient-to-tr from-violet-600/20 to-fuchsia-600/15 rounded-full blur-[140px] pointer-events-none animate-pulse duration-1000" />
+      {/* Ambient Backlight Glow */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[550px] bg-gradient-to-tr from-violet-600/15 via-fuchsia-600/10 to-transparent rounded-full blur-[130px] pointer-events-none z-0 animate-pulse duration-1000" />
 
-      {/* --- Floating DSA Code / Complexity Particles --- */}
-      {floatingElements.map((el, i) => (
-        <div
-          key={i}
-          className="absolute hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.03] border border-white/[0.08] backdrop-blur-md text-[11px] font-mono text-gray-400 select-none pointer-events-none shadow-2xl animate-float"
-          style={{
-            top: el.top,
-            left: el.left,
-            right: el.right,
-            bottom: el.bottom,
-            animationDelay: el.delay,
-            animationDuration: el.duration,
-          }}
-        >
-          <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-ping" />
-          {el.text}
-        </div>
-      ))}
-
-      {/* --- Main Glassmorphic Card --- */}
+      {/* --- Main Ultra-Clean Glassmorphic Card --- */}
       <div className="relative z-10 w-full max-w-md px-4">
-        <div className="bg-[#141417]/80 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.7)] overflow-hidden transition-all duration-300">
+        <div className="bg-[#121216]/85 backdrop-blur-2xl rounded-2xl border border-white/[0.08] shadow-[0_25px_60px_rgba(0,0,0,0.8)] overflow-hidden transition-all duration-300">
 
           {/* Header */}
           <div className="pt-10 pb-6 px-8 text-center">
@@ -113,7 +183,7 @@ export function LoginScreen({ onGuestAccess }: LoginScreenProps) {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
                   required
-                  className="block w-full pl-10 pr-3 py-3 bg-[#1c1c21] border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:bg-[#141417] focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition-all duration-200"
+                  className="block w-full pl-10 pr-3 py-3 bg-[#18181C] border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:bg-[#121216] focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition-all duration-200"
                 />
               </div>
             </div>
@@ -133,7 +203,7 @@ export function LoginScreen({ onGuestAccess }: LoginScreenProps) {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   required
-                  className="block w-full pl-10 pr-3 py-3 bg-[#1c1c21] border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:bg-[#141417] focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition-all duration-200"
+                  className="block w-full pl-10 pr-3 py-3 bg-[#18181C] border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:bg-[#121216] focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition-all duration-200"
                 />
               </div>
             </div>
@@ -194,7 +264,7 @@ export function LoginScreen({ onGuestAccess }: LoginScreenProps) {
           </form>
 
           {/* Footer Note */}
-          <div className="bg-[#101013] px-8 py-4 border-t border-white/5 text-center">
+          <div className="bg-[#0D0D10] px-8 py-4 border-t border-white/5 text-center">
             <p className="text-xs text-gray-400">
               Guest mode saves progress locally in your browser. <br/>
               <span className="text-violet-400 font-medium">Sign in</span> to enable secure cloud sync.
